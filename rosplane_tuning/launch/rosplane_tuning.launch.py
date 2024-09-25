@@ -11,7 +11,8 @@ def generate_launch_description():
 
     # Determine the appropriate control scheme.
     control_type = "default"
-    aircraft = "skyhunter" # Default aircraft 
+    # aircraft = "skyhunter" # Default aircraft 
+    aircraft = "firsttry" # Default aircraft 
 
     for arg in sys.argv:
         if arg.startswith("control_type:="):
