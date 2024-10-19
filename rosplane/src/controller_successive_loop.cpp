@@ -309,7 +309,6 @@ float ControllerSucessiveLoop::airspeed_with_throttle_hold(float va_c, float va)
   double trim_t = params_.get_double("trim_t");
 
   float error = va_c - va;
-
   float Ts = 1.0 / frequency;
 
   float at_integrator_prev = at_integrator_;
@@ -322,6 +321,8 @@ float ControllerSucessiveLoop::airspeed_with_throttle_hold(float va_c, float va)
   float ud = a_t_kd * at_differentiator_;
 
   // Why isn't this one divided by the pwm_rad_t?
+  // remove differential term (u_d) for thrust control
+
   float delta_t = sat(trim_t + up + ui + ud, max_t, 0);
   float delta_t_unsat = trim_t + up + ui + ud;
 
