@@ -37,7 +37,7 @@ autopilot:
     pwm_rad_a: 1.0
     pwm_rad_r: 1.0
     max_takeoff_throttle: 1.0
-    mass: 4.5
+    mass: 15.28 #default - 4.5
     gravity: 9.8
     max_roll: 35.0
     controller_output_frequency: 100.0
@@ -70,7 +70,7 @@ estimator:
     gps_e_lim: 10000.
     frequency: 100
     # These will be overridden on each boot the workspace is symlink installed.
-    baro_calibration_val: 0.0
-    init_lat: 0.0
-    init_lon: 0.0
-    init_alt: 0.0
+    #baro_calibration_val: 0.0
+    #init_lat: 0.0
+    #init_lon: 0.0
+    #init_alt: 0.0
