@@ -12,7 +12,7 @@
 #define SCALE 5.0
 #define TEXT_SCALE 15.0
 #define PATH_PUBLISH_MOD 10
-#define MAX_PATH_HISTORY 10000
+#define MAX_PATH_HISTORY 999999   // testing rviz path 
 using std::placeholders::_1;
 
 namespace rosplane_gcs
