@@ -7,6 +7,7 @@
 #include "rosplane_msgs/msg/controller_commands.hpp"
 #include "rosplane_msgs/msg/current_path.hpp"
 #include "rosplane_msgs/msg/state.hpp"
+#include <deque>
 
 using namespace std::chrono_literals;
 using std::placeholders::_1;
@@ -117,6 +118,11 @@ private:
    * It also sets the default parameter, which can be overridden by a parameter file
    */
   void declare_parameters();
+
+  // Attack updates
+  std::deque<std::array<double, 3>> ned_history_;           // Rolling buffer for last 5 NED values
+  std::array<double, 3> accumulated_ned_ = {0.0, 0.0, 0.0}; // Accumulated normalized sum
+  const size_t BUFFER_SIZE = 5;                             // Number of previous values to store
 };
 
 } // namespace rosplane

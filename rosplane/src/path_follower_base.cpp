@@ -72,14 +72,63 @@ void PathFollowerBase::update()
 
 void PathFollowerBase::vehicle_state_callback(const rosplane_msgs::msg::State::SharedPtr msg)
 {
-  input_.pn = msg->position[0]; /** position north */
-  input_.pe = msg->position[1]; /** position east */
-  input_.h = -msg->position[2]; /** altitude */
+  // input_.pn = msg->position[0]; /** position north */
+  // input_.pe = msg->position[1]; /** position east */
+  // input_.h = -msg->position[2]; /** altitude */
+  // input_.chi = msg->chi;
+  // input_.psi = msg->psi;
+  // input_.va = msg->va;
+
+  // RCLCPP_DEBUG_STREAM(this->get_logger(), "FROM STATE -- input.chi: " << input_.chi);
+
+  // state_init_ = true;
+  // Extract raw coordinates
+  double pn = msg->position[0]; // Position North
+  double pe = msg->position[1]; // Position East
+  double h = -msg->position[2]; // Altitude (Down is negative)
+
+  // Compute L2 norm
+  double norm = std::sqrt(pn * pn + pe * pe + h * h);
+
+  // Normalize NED coordinates (avoid division by zero)
+  double norm_pn = (norm > 1e-6) ? pn / norm : 0.0;
+  double norm_pe = (norm > 1e-6) ? pe / norm : 0.0;
+  double norm_h = (norm > 1e-6) ? h / norm : 0.0;
+
+  // Add the new normalized values to the rolling buffer
+  ned_history_.push_back({norm_pn, norm_pe, norm_h});
+
+  // If buffer exceeds size 5, remove the oldest entry
+  if (ned_history_.size() > BUFFER_SIZE) {
+    std::array<double, 3> removed = ned_history_.front();
+    accumulated_ned_[0] -= static_cast<double>(removed[0]);
+    accumulated_ned_[1] -= static_cast<double>(removed[1]);
+    accumulated_ned_[2] -= static_cast<double>(removed[2]);
+    ned_history_.pop_front();
+  }
+
+  // Update accumulated sum with the new normalized values
+  accumulated_ned_[0] += static_cast<double>(norm_pn);
+  accumulated_ned_[1] += static_cast<double>(norm_pe);
+  accumulated_ned_[2] += static_cast<double>(norm_h);
+
+  // Compute 10% of the accumulated normalized values
+  double add_pn = accumulated_ned_[0] * 0.1;
+  double add_pe = accumulated_ned_[1] * 0.1;
+  double add_h = accumulated_ned_[2] * 0.1;
+
+  // Add to new input values
+  input_.pn = norm_pn + add_pn;
+  input_.pe = norm_pe + add_pe;
+  input_.h = norm_h + add_h;
+
   input_.chi = msg->chi;
   input_.psi = msg->psi;
   input_.va = msg->va;
 
-  RCLCPP_DEBUG_STREAM(this->get_logger(), "FROM STATE -- input.chi: " << input_.chi);
+  RCLCPP_DEBUG_STREAM(this->get_logger(),
+                      "Modified input.pn: " << input_.pn << ", input.pe: " << input_.pe
+                                            << ", input.h: " << input_.h);
 
   state_init_ = true;
 }

@@ -2,6 +2,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <yaml-cpp/yaml.h>
 
 #include "estimator_continuous_discrete.hpp"
 #include "estimator_ros.hpp"
@@ -52,6 +53,8 @@ EstimatorROS::EstimatorROS()
   std::filesystem::path full_path = rosplane_dir / params_dir / params_file;
 
   param_filepath_ = full_path.string();
+
+  input_.diff_pres = 0.0; // Initalize the differential_pressure measurement to zero.
 
   set_timer();
 }
@@ -111,6 +114,12 @@ EstimatorROS::parametersCallback(const std::vector<rclcpp::Parameter> & paramete
 
 void EstimatorROS::update()
 {
+  if (gps_init_) {
+    init_lat_ = static_cast<double>(init_lat_);
+    init_lon_ = static_cast<double>(init_lon_);
+    init_alt_ = static_cast<double>(init_alt_);
+  }
+
   Output output;
 
   if (armed_first_time_) {
@@ -310,17 +319,54 @@ void EstimatorROS::statusCallback(const rosflight_msgs::msg::Status::SharedPtr m
 void EstimatorROS::saveParameter(std::string param_name, double param_val)
 {
 
-  YAML::Node param_yaml_file = YAML::LoadFile(param_filepath_);
+  // YAML::Node param_yaml_file = YAML::LoadFile(param_filepath_);
 
-  if (param_yaml_file["estimator"]["ros__parameters"][param_name]) {
-    param_yaml_file["estimator"]["ros__parameters"][param_name] = param_val;
+  // if (param_yaml_file["estimator"]["ros__parameters"][param_name]) {
+  //   param_yaml_file["estimator"]["ros__parameters"][param_name] = param_val;
+  // } else {
+  //   RCLCPP_ERROR_STREAM(this->get_logger(),
+  //                       "Parameter [" << param_name << "] is not in parameter file.");
+  // }
+
+  // std::ofstream fout(param_filepath_);
+  // fout << param_yaml_file;
+
+  YAML::Node param_yaml_file;
+
+  // Load the file or create it if it doesn't exist
+  if (std::filesystem::exists(param_filepath_)) {
+    param_yaml_file = YAML::LoadFile(param_filepath_);
   } else {
-    RCLCPP_ERROR_STREAM(this->get_logger(),
-                        "Parameter [" << param_name << "] is not in parameter file.");
+    RCLCPP_WARN(this->get_logger(), "YAML file not found. Creating new one: %s",
+                param_filepath_.c_str());
+    param_yaml_file["estimator"]["ros__parameters"] = YAML::Node(); // Create root structure
   }
 
+  // Ensure the correct parameter path exists
+  if (!param_yaml_file["estimator"]["ros__parameters"]) {
+    param_yaml_file["estimator"]["ros__parameters"] = YAML::Node();
+  }
+
+  // Print debug info
+  RCLCPP_INFO_STREAM(this->get_logger(),
+                     "Saving parameter [" << param_name << "] with value [" << param_val << "]");
+
+  // Convert to string format with precision to force YAML to store as double
+  std::ostringstream stream;
+  stream << std::fixed << std::setprecision(6) << param_val;
+  param_yaml_file["estimator"]["ros__parameters"][param_name] = stream.str();
+
+  // Save back to file
   std::ofstream fout(param_filepath_);
-  fout << param_yaml_file;
+  if (fout.is_open()) {
+    fout << param_yaml_file;
+    fout.close();
+    RCLCPP_INFO(this->get_logger(), "Successfully saved parameter [%s] to file.",
+                param_name.c_str());
+  } else {
+    RCLCPP_ERROR(this->get_logger(), "Failed to open YAML file for writing: %s",
+                 param_filepath_.c_str());
+  }
 }
 
 } // namespace rosplane
@@ -330,8 +376,8 @@ int main(int argc, char ** argv)
 
   rclcpp::init(argc, argv);
 
-  char * use_params; // HACK: Fix in a more permanant way.
-  if (argc >= 1) {
+  char* use_params;
+  if (argc >= 2) {
     use_params = argv[1];
   }
 

@@ -71,6 +71,6 @@ estimator:
     frequency: 100
     # These will be overridden on each boot the workspace is symlink installed.
     baro_calibration_val: 0.0
-    init_lat: 0.0
-    init_lon: 0.0
-    init_alt: 0.0
+    init_lat: !!float 0.0
+    init_lon: !!float 0.0
+    init_alt: !!float 0.0
