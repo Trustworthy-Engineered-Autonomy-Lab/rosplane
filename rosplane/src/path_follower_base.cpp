@@ -71,7 +71,7 @@ void PathFollowerBase::trigger_attack()
   attack_active_ = true;
   RCLCPP_WARN(this->get_logger(), "Attack triggered!");
 
-  attack_reset_timer_ = this->create_wall_timer(std::chrono::milliseconds(50), [this]() {
+  attack_reset_timer_ = this->create_wall_timer(std::chrono::milliseconds(2000), [this]() {
     attack_active_ = false;
     RCLCPP_INFO(this->get_logger(), "Attack ended");
     attack_reset_timer_->cancel();
