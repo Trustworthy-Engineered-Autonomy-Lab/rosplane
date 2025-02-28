@@ -4,6 +4,9 @@
 
 #include "path_follower_base.hpp"
 
+#include <random>
+#include <chrono>
+
 namespace rosplane
 {
 
@@ -36,6 +39,43 @@ PathFollowerBase::PathFollowerBase()
 
   state_init_ = false;
   current_path_init_ = false;
+
+  // Start scheduling attacks here
+  schedule_attacks();
+}
+
+void PathFollowerBase::schedule_attacks()
+{
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::uniform_int_distribution<int> dist(40, 90); // Random attack window between 10-50 seconds
+
+  if (attack_timers_.empty()) { // Ensure we schedule attacks only once
+    for (int i = 0; i < 5; ++i) {
+      int attack_delay = dist(gen); // Random delay for attack
+
+      // Capture the attack_delay in the lambda to avoid the error
+      attack_timers_.emplace_back(
+        this->create_wall_timer(std::chrono::seconds(attack_delay), [this, attack_delay, i]() {
+          RCLCPP_DEBUG(this->get_logger(), "Attack %d triggered after %d seconds", i + 1,
+                       attack_delay);
+          trigger_attack();
+          attack_timers_[i]->cancel(); // Cancel the timer after the attack is triggered
+        }));
+    }
+  }
+}
+
+void PathFollowerBase::trigger_attack()
+{
+  attack_active_ = true;
+  RCLCPP_WARN(this->get_logger(), "Attack triggered!");
+
+  attack_reset_timer_ = this->create_wall_timer(std::chrono::milliseconds(50), [this]() {
+    attack_active_ = false;
+    RCLCPP_INFO(this->get_logger(), "Attack ended");
+    attack_reset_timer_->cancel();
+  });
 }
 
 void PathFollowerBase::set_timer()
@@ -112,15 +152,15 @@ void PathFollowerBase::vehicle_state_callback(const rosplane_msgs::msg::State::S
   accumulated_ned_[1] += static_cast<double>(norm_pe);
   accumulated_ned_[2] += static_cast<double>(norm_h);
 
-  // Compute 10% of the accumulated normalized values
-  double add_pn = accumulated_ned_[0] * 0.1;
-  double add_pe = accumulated_ned_[1] * 0.1;
-  double add_h = accumulated_ned_[2] * 0.1;
-
-  // Add to new input values
-  input_.pn = norm_pn + add_pn;
-  input_.pe = norm_pe + add_pe;
-  input_.h = norm_h + add_h;
+  if (attack_active_) {
+    input_.pn = pn + (accumulated_ned_[0] * 0.1);
+    input_.pe = pe + (accumulated_ned_[1] * 0.1);
+    input_.h = h + (accumulated_ned_[2] * 0.1);
+  } else {
+    input_.pn = pn;
+    input_.pe = pe;
+    input_.h = h;
+  }
 
   input_.chi = msg->chi;
   input_.psi = msg->psi;

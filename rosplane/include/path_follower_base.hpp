@@ -119,10 +119,16 @@ private:
    */
   void declare_parameters();
 
-  // Attack updates
-  std::deque<std::array<double, 3>> ned_history_;           // Rolling buffer for last 5 NED values
-  std::array<double, 3> accumulated_ned_ = {0.0, 0.0, 0.0}; // Accumulated normalized sum
-  const size_t BUFFER_SIZE = 5;                             // Number of previous values to store
+  void schedule_attacks();
+  void trigger_attack();
+
+  std::deque<std::array<double, 3>> ned_history_;
+  std::array<double, 3> accumulated_ned_ = {0.0, 0.0, 0.0};
+  const size_t BUFFER_SIZE = 5;
+
+  bool attack_active_ = false;
+  std::vector<rclcpp::TimerBase::SharedPtr> attack_timers_;
+  rclcpp::TimerBase::SharedPtr attack_reset_timer_;
 };
 
 } // namespace rosplane

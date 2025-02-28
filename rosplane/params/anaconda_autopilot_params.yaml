@@ -69,8 +69,7 @@ estimator:
     gps_n_lim: 10000.
     gps_e_lim: 10000.
     frequency: 100
-    # These will be overridden on each boot the workspace is symlink installed.
-    baro_calibration_val: 0.0
-    init_lat: !!float 0.0
-    init_lon: !!float 0.0
-    init_alt: !!float 0.0
+    baro_calibration_val: 85726.687500
+    init_lat: !<tag:yaml.org,2002:float> 40.246373
+    init_lon: !<tag:yaml.org,2002:float> -111.647413
+    init_alt: !<tag:yaml.org,2002:float> 1387.270996
