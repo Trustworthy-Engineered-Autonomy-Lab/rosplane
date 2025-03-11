@@ -7,6 +7,7 @@
 #include "rosplane_msgs/msg/controller_commands.hpp"
 #include "rosplane_msgs/msg/current_path.hpp"
 #include "rosplane_msgs/msg/state.hpp"
+#include "rosplane_msgs/msg/attacked_state.hpp"
 #include <deque>
 
 using namespace std::chrono_literals;
@@ -73,6 +74,11 @@ private:
    */
   rclcpp::Publisher<rosplane_msgs::msg::ControllerCommands>::SharedPtr controller_commands_pub_;
 
+  /**
+   * Publishes new calculated state including attack specific columns to /attacked_state topic
+   */
+  rclcpp::Publisher<rosplane_msgs::msg::AttackedState>::SharedPtr attacked_state_pub_;
+
   std::chrono::microseconds timer_period_;
   rclcpp::TimerBase::SharedPtr update_timer_;
 
@@ -83,6 +89,8 @@ private:
   OnSetParametersCallbackHandle::SharedPtr parameter_callback_handle_;
   rosplane_msgs::msg::ControllerCommands controller_commands_;
   Input input_;
+
+  rosplane_msgs::msg::State last_estimated_state_;
 
   /**
    * @brief Sets the timer with the timer period as specified by the ROS2 parameters

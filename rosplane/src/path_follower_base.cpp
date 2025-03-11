@@ -4,6 +4,8 @@
 
 #include "path_follower_base.hpp"
 
+#include "rosplane_msgs/msg/attacked_state.hpp"
+
 #include <random>
 #include <chrono>
 
@@ -23,6 +25,10 @@ PathFollowerBase::PathFollowerBase()
 
   controller_commands_pub_ =
     this->create_publisher<rosplane_msgs::msg::ControllerCommands>("controller_command", 1);
+
+  // Publish attacked state logs
+  attacked_state_pub_ =
+    this->create_publisher<rosplane_msgs::msg::AttackedState>("attacked_state", 10);
 
   // Define the callback to handle on_set_parameter_callback events
   parameter_callback_handle_ = this->add_on_set_parameters_callback(
@@ -48,19 +54,21 @@ void PathFollowerBase::schedule_attacks()
 {
   std::random_device rd;
   std::mt19937 gen(rd());
-  std::uniform_int_distribution<int> dist(40, 90); // Random attack window between 10-50 seconds
+  std::uniform_int_distribution<int> dist(40, 90); // Attack randomly between 40-90 seconds
 
-  if (attack_timers_.empty()) { // Ensure we schedule attacks only once
+  if (attack_timers_.empty()) {
     for (int i = 0; i < 5; ++i) {
-      int attack_delay = dist(gen); // Random delay for attack
+      int attack_delay = dist(gen);
 
-      // Capture the attack_delay in the lambda to avoid the error
+      // Ensure only one attack is active at a time
       attack_timers_.emplace_back(
         this->create_wall_timer(std::chrono::seconds(attack_delay), [this, attack_delay, i]() {
-          RCLCPP_DEBUG(this->get_logger(), "Attack %d triggered after %d seconds", i + 1,
-                       attack_delay);
-          trigger_attack();
-          attack_timers_[i]->cancel(); // Cancel the timer after the attack is triggered
+          if (!attack_active_) { // Only trigger if no other attack is running
+            RCLCPP_DEBUG(this->get_logger(), "Attack %d triggered after %d seconds", i + 1,
+                         attack_delay);
+            trigger_attack();
+            attack_timers_[i]->cancel();
+          }
         }));
     }
   }
@@ -69,11 +77,11 @@ void PathFollowerBase::schedule_attacks()
 void PathFollowerBase::trigger_attack()
 {
   attack_active_ = true;
-  RCLCPP_WARN(this->get_logger(), "Attack triggered!");
+  RCLCPP_WARN(this->get_logger(), "ATTACK TRIGGERED!");
 
-  attack_reset_timer_ = this->create_wall_timer(std::chrono::milliseconds(2000), [this]() {
+  attack_reset_timer_ = this->create_wall_timer(std::chrono::seconds(2), [this]() {
     attack_active_ = false;
-    RCLCPP_INFO(this->get_logger(), "Attack ended");
+    RCLCPP_INFO(this->get_logger(), "ATTACK ENDED.");
     attack_reset_timer_->cancel();
   });
 }
@@ -112,65 +120,131 @@ void PathFollowerBase::update()
 
 void PathFollowerBase::vehicle_state_callback(const rosplane_msgs::msg::State::SharedPtr msg)
 {
-  // input_.pn = msg->position[0]; /** position north */
-  // input_.pe = msg->position[1]; /** position east */
-  // input_.h = -msg->position[2]; /** altitude */
+  // // input_.pn = msg->position[0]; /** position north */
+  // // input_.pe = msg->position[1]; /** position east */
+  // // input_.h = -msg->position[2]; /** altitude */
+  // // input_.chi = msg->chi;
+  // // input_.psi = msg->psi;
+  // // input_.va = msg->va;
+
+  // // RCLCPP_DEBUG_STREAM(this->get_logger(), "FROM STATE -- input.chi: " << input_.chi);
+
+  // // state_init_ = true;
+  // // Extract raw coordinates
+  // double pn = msg->position[0]; // Position North
+  // double pe = msg->position[1]; // Position East
+  // double h = -msg->position[2]; // Altitude (Down is negative)
+
+  // // Compute L2 norm
+  // double norm = std::sqrt(pn * pn + pe * pe + h * h);
+
+  // // Normalize NED coordinates (avoid division by zero)
+  // double norm_pn = (norm > 1e-6) ? pn / norm : 0.0;
+  // double norm_pe = (norm > 1e-6) ? pe / norm : 0.0;
+  // double norm_h = (norm > 1e-6) ? h / norm : 0.0;
+
+  // // Add the new normalized values to the rolling buffer
+  // ned_history_.push_back({norm_pn, norm_pe, norm_h});
+
+  // // If buffer exceeds size 5, remove the oldest entry
+  // if (ned_history_.size() > BUFFER_SIZE) {
+  //   std::array<double, 3> removed = ned_history_.front();
+  //   accumulated_ned_[0] -= static_cast<double>(removed[0]);
+  //   accumulated_ned_[1] -= static_cast<double>(removed[1]);
+  //   accumulated_ned_[2] -= static_cast<double>(removed[2]);
+  //   ned_history_.pop_front();
+  // }
+
+  // // Update accumulated sum with the new normalized values
+  // accumulated_ned_[0] += static_cast<double>(norm_pn);
+  // accumulated_ned_[1] += static_cast<double>(norm_pe);
+  // accumulated_ned_[2] += static_cast<double>(norm_h);
+
+  // if (attack_active_) {
+  //   input_.pn = pn + (accumulated_ned_[0] * 0.1);
+  //   input_.pe = pe + (accumulated_ned_[1] * 0.1);
+  //   input_.h = h + (accumulated_ned_[2] * 0.1);
+  //   input_.is_attacked = true;
+  //   input_.delta_pn = accumulated_ned_[0];
+  //   input_.delta_pe = accumulated_ned_[1];
+  //   input_.delta_h = accumulated_ned_[2];
+  // } else {
+  //   input_.pn = pn;
+  //   input_.pe = pe;
+  //   input_.h = h;
+  //   input_.is_attacked = false;
+  //   input_.delta_pn = 0;
+  //   input_.delta_pe = 0;
+  //   input_.delta_h = 0;
+  // }
+
   // input_.chi = msg->chi;
   // input_.psi = msg->psi;
   // input_.va = msg->va;
 
-  // RCLCPP_DEBUG_STREAM(this->get_logger(), "FROM STATE -- input.chi: " << input_.chi);
+  // RCLCPP_DEBUG_STREAM(this->get_logger(),
+  //                     "Modified input.pn: " << input_.pn << ", input.pe: " << input_.pe
+  //                                           << ", input.h: " << input_.h);
 
   // state_init_ = true;
-  // Extract raw coordinates
+
+  /**
+   * Kept the above original code just for reference
+   */
+
+  rosplane_msgs::msg::AttackedState last_estimated_state_;
+
+  last_estimated_state_.header = msg->header;
+  last_estimated_state_.original_state = *msg;
+
   double pn = msg->position[0]; // Position North
   double pe = msg->position[1]; // Position East
   double h = -msg->position[2]; // Altitude (Down is negative)
 
-  // Compute L2 norm
   double norm = std::sqrt(pn * pn + pe * pe + h * h);
-
-  // Normalize NED coordinates (avoid division by zero)
   double norm_pn = (norm > 1e-6) ? pn / norm : 0.0;
   double norm_pe = (norm > 1e-6) ? pe / norm : 0.0;
   double norm_h = (norm > 1e-6) ? h / norm : 0.0;
 
-  // Add the new normalized values to the rolling buffer
+  // Store history in buffer
   ned_history_.push_back({norm_pn, norm_pe, norm_h});
-
-  // If buffer exceeds size 5, remove the oldest entry
   if (ned_history_.size() > BUFFER_SIZE) {
     std::array<double, 3> removed = ned_history_.front();
-    accumulated_ned_[0] -= static_cast<double>(removed[0]);
-    accumulated_ned_[1] -= static_cast<double>(removed[1]);
-    accumulated_ned_[2] -= static_cast<double>(removed[2]);
+    accumulated_ned_[0] -= removed[0];
+    accumulated_ned_[1] -= removed[1];
+    accumulated_ned_[2] -= removed[2];
     ned_history_.pop_front();
   }
 
-  // Update accumulated sum with the new normalized values
-  accumulated_ned_[0] += static_cast<double>(norm_pn);
-  accumulated_ned_[1] += static_cast<double>(norm_pe);
-  accumulated_ned_[2] += static_cast<double>(norm_h);
+  accumulated_ned_[0] += norm_pn;
+  accumulated_ned_[1] += norm_pe;
+  accumulated_ned_[2] += norm_h;
 
+  // Log attack event
   if (attack_active_) {
     input_.pn = pn + (accumulated_ned_[0] * 0.1);
     input_.pe = pe + (accumulated_ned_[1] * 0.1);
     input_.h = h + (accumulated_ned_[2] * 0.1);
+    last_estimated_state_.is_attacked = true;
+
+    std::array<float, 3> delta_position_float = {static_cast<float>(accumulated_ned_[0]),
+                                                 static_cast<float>(accumulated_ned_[1]),
+                                                 static_cast<float>(accumulated_ned_[2])};
+    last_estimated_state_.delta_position = delta_position_float;
   } else {
     input_.pn = pn;
     input_.pe = pe;
     input_.h = h;
+    last_estimated_state_.is_attacked = false;
+    last_estimated_state_.delta_position = {0.0f, 0.0f, 0.0f};
   }
 
   input_.chi = msg->chi;
   input_.psi = msg->psi;
   input_.va = msg->va;
-
-  RCLCPP_DEBUG_STREAM(this->get_logger(),
-                      "Modified input.pn: " << input_.pn << ", input.pe: " << input_.pe
-                                            << ", input.h: " << input_.h);
-
   state_init_ = true;
+
+  attacked_state_pub_->publish(last_estimated_state_);
 }
 
 void PathFollowerBase::current_path_callback(const rosplane_msgs::msg::CurrentPath::SharedPtr msg)
