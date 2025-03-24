@@ -45,45 +45,7 @@ PathFollowerBase::PathFollowerBase()
 
   state_init_ = false;
   current_path_init_ = false;
-
-  // Start scheduling attacks here
-  schedule_attacks();
-}
-
-void PathFollowerBase::schedule_attacks()
-{
-  std::random_device rd;
-  std::mt19937 gen(rd());
-  std::uniform_int_distribution<int> dist(40, 90); // Attack randomly between 40-90 seconds
-
-  if (attack_timers_.empty()) {
-    for (int i = 0; i < 5; ++i) {
-      int attack_delay = dist(gen);
-
-      // Ensure only one attack is active at a time
-      attack_timers_.emplace_back(
-        this->create_wall_timer(std::chrono::seconds(attack_delay), [this, attack_delay, i]() {
-          if (!attack_active_) { // Only trigger if no other attack is running
-            RCLCPP_DEBUG(this->get_logger(), "Attack %d triggered after %d seconds", i + 1,
-                         attack_delay);
-            trigger_attack();
-            attack_timers_[i]->cancel();
-          }
-        }));
-    }
-  }
-}
-
-void PathFollowerBase::trigger_attack()
-{
-  attack_active_ = true;
-  RCLCPP_WARN(this->get_logger(), "ATTACK TRIGGERED!");
-
-  attack_reset_timer_ = this->create_wall_timer(std::chrono::seconds(2), [this]() {
-    attack_active_ = false;
-    RCLCPP_INFO(this->get_logger(), "ATTACK ENDED.");
-    attack_reset_timer_->cancel();
-  });
+  attack_active_ = false;  // Initialize attack state
 }
 
 void PathFollowerBase::set_timer()
@@ -118,132 +80,208 @@ void PathFollowerBase::update()
   }
 }
 
+std::array<double, 3> PathFollowerBase::apply_attack(double pn, double pe, double h,
+                                                     int attack_type)
+{
+  std::array<double, 3> result = {pn, pe, h};
+
+  rclcpp::Time now = this->get_clock()->now();
+  if (!attack_timer_initialized_) {
+    attack_start_time_ = now;
+    attack_timer_initialized_ = true;
+    RCLCPP_INFO(this->get_logger(), "Attack timing started at: %.2f", now.seconds());
+  }
+
+  double elapsed_time = (now - attack_start_time_).seconds();
+  double attack_duration = params_.get_double("attack_duration");
+
+  bool was_active = attack_active_;
+  attack_active_ = (elapsed_time >= 40.0 && elapsed_time <= (40.0 + attack_duration));
+
+  if (!was_active && attack_active_) {
+    RCLCPP_INFO(this->get_logger(), "Attack became ACTIVE at elapsed time %.2f", elapsed_time);
+  } else if (was_active && !attack_active_) {
+    RCLCPP_INFO(this->get_logger(), "Attack became INACTIVE at elapsed time %.2f", elapsed_time);
+  }
+
+  if (!attack_active_ || attack_type == 0) {
+    return result;
+  }
+
+  double attack_magnitude = params_.get_double("attack_magnitude") / 100.0;
+  double l2_norm = std::sqrt(pn * pn + pe * pe + h * h);
+  double mag = l2_norm * attack_magnitude - l2_norm;
+
+  switch (attack_type) {
+    case 1: { // Point Attack
+      if ((now - last_attack_time_).seconds() >= 5.0) {
+        last_attack_time_ = now;
+        result = {pn + mag, pe + mag, h + mag};
+        RCLCPP_WARN(this->get_logger(),
+                    "POINT ATTACK TRIGGERED at elapsed time %.2f - Magnitude: %.2f", elapsed_time,
+                    mag);
+      }
+      break;
+    }
+    case 2: { // Random Value Attack
+      if ((now - last_random_time_).seconds() >= 5.0) {
+        last_random_time_ = now;
+        static std::random_device rd;
+        static std::mt19937 gen(rd());
+        std::uniform_real_distribution<> dis(1.0, 2.0);
+        double rand_mag = mag * dis(gen);
+        result = {pn + rand_mag, pe + rand_mag, h + rand_mag};
+        RCLCPP_INFO(this->get_logger(),
+                    "Random Value Attack - Modified: [%.2f, %.2f, %.2f] -> [%.2f, %.2f, %.2f], "
+                    "Rand Mag: %.2f",
+                    pn, pe, h, result[0], result[1], result[2], rand_mag);
+      }
+      break;
+    }
+    case 3: { // Sequence Attack
+      double elapsed = (now - sequence_start_time_).seconds();
+      if (elapsed >= attack_duration || sequence_start_time_ == rclcpp::Time(0, 0, RCL_ROS_TIME)) {
+        sequence_start_time_ = now;
+        elapsed = 0;
+        RCLCPP_INFO(this->get_logger(), "Sequence Attack - Starting new sequence at elapsed %.2f",
+                    elapsed_time);
+      }
+      if (elapsed < attack_duration) {
+        result = {pn + mag, pe + mag, h + mag};
+        RCLCPP_INFO(
+          this->get_logger(),
+          "Sequence Attack - Modified: [%.2f, %.2f, %.2f] -> [%.2f, %.2f, %.2f], Elapsed: %.2f", pn,
+          pe, h, result[0], result[1], result[2], elapsed);
+      }
+      break;
+    }
+    case 4: { // Ramp Attack
+      double elapsed = (now - ramp_start_time_).seconds();
+      if (elapsed >= attack_duration || ramp_start_time_ == rclcpp::Time(0, 0, RCL_ROS_TIME)) {
+        ramp_start_time_ = now;
+        elapsed = 0;
+        RCLCPP_INFO(this->get_logger(), "Ramp Attack - Starting ramp at elapsed %.2f",
+                    elapsed_time);
+      }
+      if (elapsed < attack_duration) {
+        double ramp_factor = elapsed / attack_duration;
+        double current_mag = mag * ramp_factor;
+        result = {pn + current_mag, pe + current_mag, h + current_mag};
+        RCLCPP_INFO(
+          this->get_logger(),
+          "Ramp Attack - Modified: [%.2f, %.2f, %.2f] -> [%.2f, %.2f, %.2f], Ramp factor: %.2f", pn,
+          pe, h, result[0], result[1], result[2], ramp_factor);
+      }
+      break;
+    }
+    case 5: { // DoS Attack
+      double elapsed = (now - sequence_start_time_).seconds();
+      if (elapsed >= attack_duration || sequence_start_time_ == rclcpp::Time(0, 0, RCL_ROS_TIME)) {
+        sequence_start_time_ = now;
+        frozen_position_ = {pn, pe, h};
+        is_position_frozen_ = true;
+        elapsed = 0;
+        RCLCPP_INFO(this->get_logger(), "DoS Attack - Freezing at: [%.2f, %.2f, %.2f]", pn, pe, h);
+      }
+      if (elapsed < attack_duration && is_position_frozen_) {
+        result = frozen_position_;
+        RCLCPP_INFO(this->get_logger(),
+                    "DoS Attack - Maintaining frozen: [%.2f, %.2f, %.2f], Elapsed: %.2f", result[0],
+                    result[1], result[2], elapsed);
+      } else {
+        is_position_frozen_ = false;
+      }
+      break;
+    }
+    case 6: { // Random Pattern Attack
+      if (random_attack_times_.empty()
+          || (now - sequence_start_time_).seconds() >= attack_duration) {
+        sequence_start_time_ = now;
+        random_attack_times_.clear();
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        for (int i = 0; i < 10; ++i) {
+          double base_time = elapsed_time + (i * attack_duration / 10.0);
+          std::uniform_real_distribution<> dis(-1.0, 1.0);
+          random_attack_times_.push_back(base_time + dis(gen));
+        }
+        RCLCPP_INFO(this->get_logger(), "Random Pattern Attack - New times at %.2f", elapsed_time);
+      }
+
+      static rclcpp::Time last_pattern_time(0, 0, now.get_clock_type());
+      for (const auto & attack_time : random_attack_times_) {
+        if (std::abs(elapsed_time - attack_time) < 0.05
+            && (now - last_pattern_time).seconds() >= 1.0) {
+          last_pattern_time = now;
+          result = {pn + mag, pe + mag, h + mag};
+          RCLCPP_INFO(this->get_logger(), "Random Pattern Attack - TRIGGERED at %.2f",
+                      elapsed_time);
+          break;
+        }
+      }
+      break;
+    }
+    default:
+      break;
+  }
+
+  return result;
+}
+
 void PathFollowerBase::vehicle_state_callback(const rosplane_msgs::msg::State::SharedPtr msg)
 {
-  // // input_.pn = msg->position[0]; /** position north */
-  // // input_.pe = msg->position[1]; /** position east */
-  // // input_.h = -msg->position[2]; /** altitude */
-  // // input_.chi = msg->chi;
-  // // input_.psi = msg->psi;
-  // // input_.va = msg->va;
-
-  // // RCLCPP_DEBUG_STREAM(this->get_logger(), "FROM STATE -- input.chi: " << input_.chi);
-
-  // // state_init_ = true;
-  // // Extract raw coordinates
-  // double pn = msg->position[0]; // Position North
-  // double pe = msg->position[1]; // Position East
-  // double h = -msg->position[2]; // Altitude (Down is negative)
-
-  // // Compute L2 norm
-  // double norm = std::sqrt(pn * pn + pe * pe + h * h);
-
-  // // Normalize NED coordinates (avoid division by zero)
-  // double norm_pn = (norm > 1e-6) ? pn / norm : 0.0;
-  // double norm_pe = (norm > 1e-6) ? pe / norm : 0.0;
-  // double norm_h = (norm > 1e-6) ? h / norm : 0.0;
-
-  // // Add the new normalized values to the rolling buffer
-  // ned_history_.push_back({norm_pn, norm_pe, norm_h});
-
-  // // If buffer exceeds size 5, remove the oldest entry
-  // if (ned_history_.size() > BUFFER_SIZE) {
-  //   std::array<double, 3> removed = ned_history_.front();
-  //   accumulated_ned_[0] -= static_cast<double>(removed[0]);
-  //   accumulated_ned_[1] -= static_cast<double>(removed[1]);
-  //   accumulated_ned_[2] -= static_cast<double>(removed[2]);
-  //   ned_history_.pop_front();
-  // }
-
-  // // Update accumulated sum with the new normalized values
-  // accumulated_ned_[0] += static_cast<double>(norm_pn);
-  // accumulated_ned_[1] += static_cast<double>(norm_pe);
-  // accumulated_ned_[2] += static_cast<double>(norm_h);
-
-  // if (attack_active_) {
-  //   input_.pn = pn + (accumulated_ned_[0] * 0.1);
-  //   input_.pe = pe + (accumulated_ned_[1] * 0.1);
-  //   input_.h = h + (accumulated_ned_[2] * 0.1);
-  //   input_.is_attacked = true;
-  //   input_.delta_pn = accumulated_ned_[0];
-  //   input_.delta_pe = accumulated_ned_[1];
-  //   input_.delta_h = accumulated_ned_[2];
-  // } else {
-  //   input_.pn = pn;
-  //   input_.pe = pe;
-  //   input_.h = h;
-  //   input_.is_attacked = false;
-  //   input_.delta_pn = 0;
-  //   input_.delta_pe = 0;
-  //   input_.delta_h = 0;
-  // }
-
-  // input_.chi = msg->chi;
-  // input_.psi = msg->psi;
-  // input_.va = msg->va;
-
-  // RCLCPP_DEBUG_STREAM(this->get_logger(),
-  //                     "Modified input.pn: " << input_.pn << ", input.pe: " << input_.pe
-  //                                           << ", input.h: " << input_.h);
-
-  // state_init_ = true;
-
-  /**
-   * Kept the above original code just for reference
-   */
-
   rosplane_msgs::msg::AttackedState last_estimated_state_;
-
   last_estimated_state_.header = msg->header;
   last_estimated_state_.original_state = *msg;
 
-  double pn = msg->position[0]; // Position North
-  double pe = msg->position[1]; // Position East
-  double h = -msg->position[2]; // Altitude (Down is negative)
+  double pn = msg->position[0];
+  double pe = msg->position[1];
+  double h = -msg->position[2];
 
-  double norm = std::sqrt(pn * pn + pe * pe + h * h);
-  double norm_pn = (norm > 1e-6) ? pn / norm : 0.0;
-  double norm_pe = (norm > 1e-6) ? pe / norm : 0.0;
-  double norm_h = (norm > 1e-6) ? h / norm : 0.0;
+  int attack_type = params_.get_int("attack_type");
+  auto attacked_values = apply_attack(pn, pe, h, attack_type);
 
-  // Store history in buffer
-  ned_history_.push_back({norm_pn, norm_pe, norm_h});
-  if (ned_history_.size() > BUFFER_SIZE) {
-    std::array<double, 3> removed = ned_history_.front();
-    accumulated_ned_[0] -= removed[0];
-    accumulated_ned_[1] -= removed[1];
-    accumulated_ned_[2] -= removed[2];
-    ned_history_.pop_front();
-  }
+  input_.pn = attacked_values[0];
+  input_.pe = attacked_values[1];
+  input_.h = attacked_values[2];
 
-  accumulated_ned_[0] += norm_pn;
-  accumulated_ned_[1] += norm_pe;
-  accumulated_ned_[2] += norm_h;
-
-  // Log attack event
-  if (attack_active_) {
-    input_.pn = pn + (accumulated_ned_[0] * 0.1);
-    input_.pe = pe + (accumulated_ned_[1] * 0.1);
-    input_.h = h + (accumulated_ned_[2] * 0.1);
-    last_estimated_state_.is_attacked = true;
-
-    std::array<float, 3> delta_position_float = {static_cast<float>(accumulated_ned_[0]),
-                                                 static_cast<float>(accumulated_ned_[1]),
-                                                 static_cast<float>(accumulated_ned_[2])};
-    last_estimated_state_.delta_position = delta_position_float;
-  } else {
-    input_.pn = pn;
-    input_.pe = pe;
-    input_.h = h;
-    last_estimated_state_.is_attacked = false;
-    last_estimated_state_.delta_position = {0.0f, 0.0f, 0.0f};
-  }
+  last_estimated_state_.is_attacked = attack_active_ && attack_type != 0;
+  last_estimated_state_.delta_position = {
+    static_cast<float>(attacked_values[0] - pn),
+    static_cast<float>(attacked_values[1] - pe),
+    static_cast<float>(attacked_values[2] - h)
+  };
 
   input_.chi = msg->chi;
   input_.psi = msg->psi;
   input_.va = msg->va;
   state_init_ = true;
 
+  // Convert numeric attack type to string name
+  std::string attack_name = "NO_ATTACK";
+  if (attack_active_) {
+    switch (attack_type) {
+      case 1:
+        attack_name = "POINT_ATTACK";
+        break;
+      case 2:
+        attack_name = "RANDOM_VALUE_ATTACK"; 
+        break;
+      case 3:
+        attack_name = "SEQUENCE_ATTACK";
+        break;
+      case 4:
+        attack_name = "RAMP_ATTACK";
+        break;
+      case 5:
+        attack_name = "DOS_ATTACK";
+        break;
+      case 6:
+        attack_name = "RANDOM_PATTERN_ATTACK";
+        break;
+    }
+  }
+  last_estimated_state_.attack_type = attack_name;  // Now storing string name
   attacked_state_pub_->publish(last_estimated_state_);
 }
 
@@ -304,6 +342,9 @@ void PathFollowerBase::declare_parameters()
   params_.declare_double("k_orbit", 4.0);
   params_.declare_int("update_rate", 100);
   params_.declare_double("gravity", 9.81);
+  params_.declare_int("attack_type", 0);
+  params_.declare_double("attack_duration", 50.0);
+  params_.declare_double("attack_magnitude", 10.0);
 }
 
 } // namespace rosplane
