@@ -110,7 +110,7 @@ std::array<double, 3> PathFollowerBase::apply_attack(double pn, double pe, doubl
 
   double attack_magnitude = params_.get_double("attack_magnitude") / 100.0;
   double l2_norm = std::sqrt(pn * pn + pe * pe + h * h);
-  double mag = l2_norm * attack_magnitude - l2_norm;
+  double mag = l2_norm * attack_magnitude;
 
   switch (attack_type) {
     case 1: { // Point Attack
