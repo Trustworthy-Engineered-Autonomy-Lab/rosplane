@@ -22,6 +22,18 @@ enum class PathType
   LINE
 };
 
+enum class AttackType
+{
+  NO_ATTACK = 0,        // Default - no attack
+  L2_NORM = 1,          // L2 Norm Attack
+  POINT_ATTACK = 2,     // Point Attack
+  RANDOM_VALUE = 3,     // Random Value Attack
+  SEQUENCE = 4,         // Sequence Attack
+  RAMP = 5,             // Ramp Attack
+  DOS = 6,              // Denial-of-Service Attack
+  RANDOM_PATTERN = 7    // Random Pattern Attack
+};
+
 class PathFollowerBase : public rclcpp::Node
 {
 public:
@@ -92,6 +104,17 @@ private:
 
   rosplane_msgs::msg::State last_estimated_state_;
 
+  // Attack timing variables
+  bool attack_timer_initialized_{false};
+  rclcpp::Time attack_start_time_{0, 0, RCL_ROS_TIME};
+  
+  // Existing timing variables
+  rclcpp::Time sequence_start_time_{0, 0, RCL_ROS_TIME};
+  rclcpp::Time ramp_start_time_{0, 0, RCL_ROS_TIME};
+  rclcpp::Time last_attack_time_{0, 0, RCL_ROS_TIME};
+  rclcpp::Time last_random_time_{0, 0, RCL_ROS_TIME};
+  rclcpp::Time last_pattern_time_{0, 0, RCL_ROS_TIME};
+
   /**
    * @brief Sets the timer with the timer period as specified by the ROS2 parameters
    */
@@ -127,16 +150,26 @@ private:
    */
   void declare_parameters();
 
-  void schedule_attacks();
-  void trigger_attack();
-
   std::deque<std::array<double, 3>> ned_history_;
   std::array<double, 3> accumulated_ned_ = {0.0, 0.0, 0.0};
   const size_t BUFFER_SIZE = 5;
 
   bool attack_active_ = false;
-  std::vector<rclcpp::TimerBase::SharedPtr> attack_timers_;
-  rclcpp::TimerBase::SharedPtr attack_reset_timer_;
+  AttackType current_attack_type_ = AttackType::NO_ATTACK;
+
+  // Helper function to apply attacks to position values
+  std::array<double, 3> apply_attack(double pn, double pe, double h, int attack_type);
+
+
+  // Attack state variables
+  static constexpr double EPSILON = 0.01;
+  static constexpr double ATTACK_PERIOD = 40.0;
+  static constexpr double ATTACK_DURATION = 10.0;
+  
+  // Attack state tracking
+  std::array<double, 3> frozen_position_ = {0.0, 0.0, 0.0};
+  std::vector<double> random_attack_times_;
+  bool is_position_frozen_ = false;
 };
 
 } // namespace rosplane

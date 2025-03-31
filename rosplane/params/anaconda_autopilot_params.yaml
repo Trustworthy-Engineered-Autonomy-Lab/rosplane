@@ -55,6 +55,9 @@ path_follower:
     k_orbit: 4.0
     k_path: 0.05
     gravity: 9.81
+    attack_type: 0
+    attack_duration: 50.0
+    attack_magnitude: 10.0
 estimator:
   ros__parameters:
     rho: 1.225
