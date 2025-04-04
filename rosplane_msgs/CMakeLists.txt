@@ -31,6 +31,7 @@ set(msg_files
   "msg/State.msg"
   "msg/Waypoint.msg"
   "msg/AttackedState.msg"
+  "msg/UnderAttack.msg"
 )
 
 set(srv_files
