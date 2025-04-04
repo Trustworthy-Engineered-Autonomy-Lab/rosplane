@@ -55,6 +55,9 @@ path_follower:
     k_orbit: 4.0
     k_path: 0.05
     gravity: 9.81
+    attack_type: 0
+    attack_duration: 50.0
+    attack_magnitude: 10.0
 estimator:
   ros__parameters:
     rho: 1.225
@@ -69,8 +72,7 @@ estimator:
     gps_n_lim: 10000.
     gps_e_lim: 10000.
     frequency: 100
-    # These will be overridden on each boot the workspace is symlink installed.
-    baro_calibration_val: 0.0
-    init_lat: 0.0
-    init_lon: 0.0
-    init_alt: 0.0
+    baro_calibration_val: 85726.687500
+    init_lat: !<tag:yaml.org,2002:float> 40.246373
+    init_lon: !<tag:yaml.org,2002:float> -111.647413
+    init_alt: !<tag:yaml.org,2002:float> 1387.270996
