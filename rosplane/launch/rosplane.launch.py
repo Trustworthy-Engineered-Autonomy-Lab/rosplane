@@ -79,5 +79,5 @@ def generate_launch_description():
             output='screen',
             parameters = [autopilot_params],
             arguments = [use_params]
-        )
+        ),
     ])
