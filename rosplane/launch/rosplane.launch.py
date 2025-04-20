@@ -80,4 +80,29 @@ def generate_launch_description():
             parameters = [autopilot_params],
             arguments = [use_params]
         ),
+        # The new nodes follow from here
+        Node(
+            package='state_attacker',
+            executable='state_attacker_node',
+            name='state_attacker',
+            output='screen',
+        ),
+        Node(
+            package='path_follower_mux',
+            executable='path_follower_mux_node',
+            name='path_follower_mux',
+            output='screen',
+        ),
+        Node(
+            package='trained_path_follower',
+            executable='trained_path_follower_node',
+            name='trained_path_follower',
+            output='screen',
+        ),
+        Node(
+            package='attack_detector',
+            executable='attack_detector_node',
+            name='attack_detector',
+            output='screen',
+        ),
     ])

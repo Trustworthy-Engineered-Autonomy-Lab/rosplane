@@ -17,18 +17,14 @@ PathFollowerBase::PathFollowerBase()
     , params_(this)
     , params_initialized_(false)
 {
-  vehicle_state_sub_ = this->create_subscription<rosplane_msgs::msg::State>(
-    "estimated_state", 10, std::bind(&PathFollowerBase::vehicle_state_callback, this, _1));
+  vehicle_state_sub_ = this->create_subscription<rosplane_msgs::msg::AttackedState>(
+    "attacked_state", 10, std::bind(&PathFollowerBase::vehicle_state_callback, this, _1));
 
   current_path_sub_ = this->create_subscription<rosplane_msgs::msg::CurrentPath>(
     "current_path", 100, std::bind(&PathFollowerBase::current_path_callback, this, _1));
 
   controller_commands_pub_ =
-    this->create_publisher<rosplane_msgs::msg::ControllerCommands>("controller_command", 1);
-
-  // Publish attacked state logs
-  attacked_state_pub_ =
-    this->create_publisher<rosplane_msgs::msg::AttackedState>("attacked_state", 10);
+    this->create_publisher<rosplane_msgs::msg::ControllerCommands>("normal_controller_command", 1);
 
   // Define the callback to handle on_set_parameter_callback events
   parameter_callback_handle_ = this->add_on_set_parameters_callback(
@@ -228,61 +224,66 @@ std::array<double, 3> PathFollowerBase::apply_attack(double pn, double pe, doubl
   return result;
 }
 
-void PathFollowerBase::vehicle_state_callback(const rosplane_msgs::msg::State::SharedPtr msg)
+void PathFollowerBase::vehicle_state_callback(const rosplane_msgs::msg::AttackedState::SharedPtr msg)
 {
-  rosplane_msgs::msg::AttackedState last_estimated_state_;
-  last_estimated_state_.header = msg->header;
-  last_estimated_state_.original_state = *msg;
+  // rosplane_msgs::msg::AttackedState last_estimated_state_;
+  // last_estimated_state_.header = msg->header;
+  // last_estimated_state_.original_state = *msg;
 
-  double pn = msg->position[0];
-  double pe = msg->position[1];
-  double h = -msg->position[2];
-
-  int attack_type = params_.get_int("attack_type");
-  auto attacked_values = apply_attack(pn, pe, h, attack_type);
-
-  input_.pn = attacked_values[0];
-  input_.pe = attacked_values[1];
-  input_.h = attacked_values[2];
-
-  last_estimated_state_.is_attacked = attack_active_ && attack_type != 0;
-  last_estimated_state_.delta_position = {
-    static_cast<float>(attacked_values[0] - pn),
-    static_cast<float>(attacked_values[1] - pe),
-    static_cast<float>(attacked_values[2] - h)
-  };
-
+  input_.pn = msg->position[0]; /** position north */
+  input_.pe = msg->position[1]; /** position east */
+  input_.h = -msg->position[2]; /** altitude */
   input_.chi = msg->chi;
   input_.psi = msg->psi;
   input_.va = msg->va;
-  state_init_ = true;
 
-  // Convert numeric attack type to string name
-  std::string attack_name = "NO_ATTACK";
-  if (attack_active_) {
-    switch (attack_type) {
-      case 1:
-        attack_name = "POINT_ATTACK";
-        break;
-      case 2:
-        attack_name = "RANDOM_VALUE_ATTACK"; 
-        break;
-      case 3:
-        attack_name = "SEQUENCE_ATTACK";
-        break;
-      case 4:
-        attack_name = "RAMP_ATTACK";
-        break;
-      case 5:
-        attack_name = "DOS_ATTACK";
-        break;
-      case 6:
-        attack_name = "RANDOM_PATTERN_ATTACK";
-        break;
-    }
-  }
-  last_estimated_state_.attack_type = attack_name;  // Now storing string name
-  attacked_state_pub_->publish(last_estimated_state_);
+  RCLCPP_DEBUG_STREAM(this->get_logger(), "FROM STATE -- input.chi: " << input_.chi);
+
+  state_init_ = true;
+  // int attack_type = params_.get_int("attack_type");
+  // auto attacked_values = apply_attack(pn, pe, h, attack_type);
+
+  // input_.pn = attacked_values[0];
+  // input_.pe = attacked_values[1];
+  // input_.h = attacked_values[2];
+
+  // last_estimated_state_.is_attacked = attack_active_ && attack_type != 0;
+  // last_estimated_state_.delta_position = {
+  //   static_cast<float>(attacked_values[0] - pn),
+  //   static_cast<float>(attacked_values[1] - pe),
+  //   static_cast<float>(attacked_values[2] - h)
+  // };
+
+  // input_.chi = msg->chi;
+  // input_.psi = msg->psi;
+  // input_.va = msg->va;
+  // state_init_ = true;
+
+  // // Convert numeric attack type to string name
+  // std::string attack_name = "NO_ATTACK";
+  // if (attack_active_) {
+  //   switch (attack_type) {
+  //     case 1:
+  //       attack_name = "POINT_ATTACK";
+  //       break;
+  //     case 2:
+  //       attack_name = "RANDOM_VALUE_ATTACK"; 
+  //       break;
+  //     case 3:
+  //       attack_name = "SEQUENCE_ATTACK";
+  //       break;
+  //     case 4:
+  //       attack_name = "RAMP_ATTACK";
+  //       break;
+  //     case 5:
+  //       attack_name = "DOS_ATTACK";
+  //       break;
+  //     case 6:
+  //       attack_name = "RANDOM_PATTERN_ATTACK";
+  //       break;
+  //   }
+  // }
+  // last_estimated_state_.attack_type = attack_name;  // Now storing string name
 }
 
 void PathFollowerBase::current_path_callback(const rosplane_msgs::msg::CurrentPath::SharedPtr msg)

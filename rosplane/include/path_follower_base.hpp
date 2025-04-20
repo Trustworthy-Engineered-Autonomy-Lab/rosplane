@@ -74,7 +74,7 @@ private:
   /**
    * Subscribes to state from the estimator
    */
-  rclcpp::Subscription<rosplane_msgs::msg::State>::SharedPtr vehicle_state_sub_;
+  rclcpp::Subscription<rosplane_msgs::msg::AttackedState>::SharedPtr vehicle_state_sub_;
 
   /** 
    * Subscribes to the current_path topic from the path manager
@@ -86,10 +86,6 @@ private:
    */
   rclcpp::Publisher<rosplane_msgs::msg::ControllerCommands>::SharedPtr controller_commands_pub_;
 
-  /**
-   * Publishes new calculated state including attack specific columns to /attacked_state topic
-   */
-  rclcpp::Publisher<rosplane_msgs::msg::AttackedState>::SharedPtr attacked_state_pub_;
 
   std::chrono::microseconds timer_period_;
   rclcpp::TimerBase::SharedPtr update_timer_;
@@ -102,8 +98,8 @@ private:
   rosplane_msgs::msg::ControllerCommands controller_commands_;
   Input input_;
 
-  rosplane_msgs::msg::State last_estimated_state_;
-
+  rosplane_msgs::msg::AttackedState last_estimated_state_;
+  
   // Attack timing variables
   bool attack_timer_initialized_{false};
   rclcpp::Time attack_start_time_{0, 0, RCL_ROS_TIME};
@@ -123,7 +119,7 @@ private:
   /**
    * @brief Callback for the subscribed state messages from the estimator
    */
-  void vehicle_state_callback(const rosplane_msgs::msg::State::SharedPtr msg);
+  void vehicle_state_callback(const rosplane_msgs::msg::AttackedState::SharedPtr msg);
 
   /**
    * @brief Callback for the subscribed current_path messages from the path_manager
