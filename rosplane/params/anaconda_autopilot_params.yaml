@@ -43,7 +43,7 @@ autopilot:
     controller_output_frequency: 100.0
 path_manager:
   ros__parameters:
-    R_min: 100.0
+    R_min: 0.0
     orbit_last: False
     default_altitude: 50.0
     default_airspeed: 25.0

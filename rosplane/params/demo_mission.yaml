@@ -1,0 +1,41 @@
+# WAYPOINTS
+# wp:
+#   w: [30, 50, -30.0]
+#   chi_d: 0.0
+#   lla: False
+#   use_chi: False
+#   va_d: 30.0
+#   set_current: True
+#   clear_wp_list: True
+# wp:
+#   w: [0, -600.648, -30.0]
+#   chi_d: 0.0
+#   lla: False
+#   use_chi: False
+#   va_d: 30.0
+#   set_current: False
+#   clear_wp_list: False
+wp:
+  w: [0.0, -1000.0, -30.0]   # 200m west of target
+  lla: false
+  chi_d: 1.57                # Eastward direction
+  use_chi: true              # Force heading for Dubins
+  va_d: 25.0
+  set_current: true
+  clear_wp_list: true
+wp:
+  w: [0.0, -800.0, -30.0]   # Target location
+  lla: false
+  chi_d: 1.57
+  use_chi: true
+  va_d: 25.0
+  set_current: false
+  clear_wp_list: false
+wp:
+  w: [0.0, -600.0, -30.0]    # 200m past target
+  lla: false
+  chi_d: 1.57
+  use_chi: true
+  va_d: 25.0
+  set_current: false
+  clear_wp_list: false
