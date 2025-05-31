@@ -1,0 +1,17 @@
+# WAYPOINTS
+wp:
+  w: [30, 50, -30.0]
+  chi_d: 0.0
+  lla: False
+  use_chi: False
+  va_d: 30.0
+  set_current: False
+  clear_wp_list: True
+wp:
+  w: [0.0, -1010.0, 10.0]
+  chi_d: 0.0
+  lla: False
+  use_chi: False
+  va_d: 30.0
+  set_current: False
+  clear_wp_list: False
